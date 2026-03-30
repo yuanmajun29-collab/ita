@@ -24,13 +24,51 @@ function goToPage(pageId) {
 }
 
 // ===== 拍照流程 =====
+let lastQualityReady = false;
+
 async function openCamera() {
     const success = await Camera.open();
     if (success) {
         goToPage('page-camera');
+        // 启动实时质量检测
+        lastQualityReady = false;
+        Camera.startQualityCheck(onQualityUpdate, 500);
     } else {
         alert('无法访问摄像头，请从相册选择照片');
         uploadFromAlbum();
+    }
+}
+
+function onQualityUpdate(result) {
+    const overlay = document.getElementById('quality-overlay');
+    const captureBtn = document.getElementById('btn-capture');
+
+    if (!overlay) return;
+
+    lastQualityReady = result.ready;
+
+    // 更新质量分数
+    const scorePct = Math.round(result.score * 100);
+    const scoreColor = result.ready ? '#4CAF50' : scorePct > 50 ? '#FFC107' : '#F44336';
+    overlay.innerHTML = `
+        <div class="quality-score" style="border-color:${scoreColor}">
+            <span class="quality-num" style="color:${scoreColor}">${scorePct}</span>
+            <span class="quality-label">质量分</span>
+        </div>
+        <div class="quality-tips">
+            ${result.tips.map(t => `<div class="quality-tip ${t.startsWith('✅') ? 'tip-ok' : t.startsWith('📄') && t.includes('已') ? 'tip-ok' : t.startsWith('🦴') && t.includes('已') ? 'tip-ok' : ''}">${t}</div>`).join('')}
+        </div>
+    `;
+
+    // 更新拍照按钮状态
+    if (captureBtn) {
+        if (result.ready) {
+            captureBtn.classList.add('btn-ready');
+            captureBtn.textContent = '✅ 拍照';
+        } else {
+            captureBtn.classList.remove('btn-ready');
+            captureBtn.textContent = '📷 拍照';
+        }
     }
 }
 

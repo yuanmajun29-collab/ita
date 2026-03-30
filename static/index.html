@@ -57,13 +57,17 @@
 
         <!-- 页面 2: 拍照 -->
         <section id="page-camera" class="page">
-            <div class="card">
+            <div class="card camera-card">
                 <div class="camera-container">
                     <video id="camera-preview" autoplay playsinline></video>
                     <canvas id="camera-canvas" style="display:none;"></canvas>
+                    <!-- 实时质量反馈叠加层 -->
+                    <div class="quality-overlay" id="quality-overlay">
+                        <div class="quality-loading">正在检测...</div>
+                    </div>
                 </div>
                 <div class="btn-group">
-                    <button id="btn-capture" class="btn btn-primary btn-large" onclick="capturePhoto()">📷 拍照</button>
+                    <button id="btn-capture" class="btn btn-primary btn-large btn-disabled" onclick="capturePhoto()" disabled>📷 检测中...</button>
                     <button class="btn btn-secondary" onclick="goToPage('page-guide')">← 返回</button>
                 </div>
             </div>

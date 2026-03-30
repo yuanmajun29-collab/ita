@@ -11,26 +11,27 @@ from fastapi.responses import FileResponse
 import os
 
 from ita.api.routes import router
+from ita.api.ws_routes import router as ws_router
 
 app = FastAPI(
     title="ITA 肤色分析系统",
-    description="基于手机拍照的个人肤色自测程序 - 分析 ITA° 并分类肤色",
-    version="1.0.0"
+    description="基于手机拍照的个人肤色自测程序 - 分析 ITA° 并分类肤色，提供UV照射与维D合成建议",
+    version="1.2.0"
 )
 
 # 注册 API 路由
 app.include_router(router)
+# 注册 WebSocket 路由
+app.include_router(ws_router)
 
 # 静态文件目录
 STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static")
 
-# 挂载静态文件（API 路由之后，避免覆盖 /api/ 路径）
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     @app.get("/")
     async def serve_index():
-        """前端首页"""
         index_path = os.path.join(STATIC_DIR, "index.html")
         if os.path.exists(index_path):
             return FileResponse(index_path)
