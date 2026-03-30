@@ -5,50 +5,64 @@
 const API = {
     BASE_URL: '',
 
-    // 检查后端是否可用
     async checkHealth() {
         try {
-            const resp = await fetch(`${this.BASE_URL}/api/health`, {
-                method: 'GET',
-                timeout: 3000
-            });
+            const resp = await fetch(`${this.BASE_URL}/api/health`);
             return resp.ok;
         } catch (e) {
             return false;
         }
     },
 
-    /**
-     * 上传图片进行肤色分析
-     * @param {File|Blob} imageFile - 图片文件
-     * @returns {Promise<Object>} 分析结果
-     */
-    async analyzeImage(imageFile) {
+    async analyzeImage(imageFile, lat, lon) {
         const formData = new FormData();
         formData.append('file', imageFile, 'photo.jpg');
 
-        try {
-            const resp = await fetch(`${this.BASE_URL}/api/analyze`, {
-                method: 'POST',
-                body: formData
-            });
+        let url = `${this.BASE_URL}/api/analyze`;
+        const params = [];
+        if (lat) params.push(`lat=${lat}`);
+        if (lon) params.push(`lon=${lon}`);
+        if (params.length) url += '?' + params.join('&');
 
-            const data = await resp.json();
-            return data;
+        try {
+            const resp = await fetch(url, { method: 'POST', body: formData });
+            return await resp.json();
         } catch (e) {
-            return {
-                success: false,
-                message: `网络错误: ${e.message}`
-            };
+            return { success: false, message: `网络错误: ${e.message}` };
         }
     },
 
-    /**
-     * 获取历史记录
-     */
-    async getHistory() {
+    async getHistory(limit = 20) {
         try {
-            const resp = await fetch(`${this.BASE_URL}/api/history`);
+            const resp = await fetch(`${this.BASE_URL}/api/history?limit=${limit}`);
+            return await resp.json();
+        } catch (e) {
+            return { success: false, message: '网络错误' };
+        }
+    },
+
+    async getTrend(days = 30) {
+        try {
+            const resp = await fetch(`${this.BASE_URL}/api/trend?days=${days}`);
+            return await resp.json();
+        } catch (e) {
+            return { success: false, message: '网络错误' };
+        }
+    },
+
+    async getUvAdvice(ita, fitzpatrick, uvIndex, lat, lon, month, hour, exposureTime) {
+        const params = new URLSearchParams({
+            ita, fitzpatrick
+        });
+        if (uvIndex !== undefined) params.append('uv_index', uvIndex);
+        if (lat) params.append('lat', lat);
+        if (lon) params.append('lon', lon);
+        if (month) params.append('month', month);
+        if (hour) params.append('hour', hour);
+        if (exposureTime) params.append('exposure_time', exposureTime);
+
+        try {
+            const resp = await fetch(`${this.BASE_URL}/api/uv-advice?${params}`);
             return await resp.json();
         } catch (e) {
             return { success: false, message: '网络错误' };

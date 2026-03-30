@@ -15,59 +15,47 @@
             <p class="subtitle">拍照自测 · 了解你的肤色</p>
         </header>
 
+        <!-- 底部导航 -->
+        <nav class="tab-bar">
+            <button class="tab active" data-page="page-guide" onclick="switchTab(this)">🏠 首页</button>
+            <button class="tab" data-page="page-history-list" onclick="switchTab(this)">📋 历史</button>
+            <button class="tab" data-page="page-uv-tool" onclick="switchTab(this)">☀️ UV建议</button>
+        </nav>
+
         <!-- 页面 1: 拍照引导 -->
         <section id="page-guide" class="page active">
             <div class="card">
                 <h2>📷 拍照指南</h2>
                 <p class="guide-desc">将前臂和白色A4纸放在一起拍照，程序会自动分析你的肤色类型。</p>
-
                 <div class="steps">
                     <div class="step">
                         <div class="step-num">1</div>
-                        <div class="step-content">
-                            <h3>选择光线</h3>
-                            <p>白天靠窗，自然光线下拍摄</p>
-                        </div>
+                        <div class="step-content"><h3>选择光线</h3><p>白天靠窗，自然光线下拍摄</p></div>
                     </div>
                     <div class="step">
                         <div class="step-num">2</div>
-                        <div class="step-content">
-                            <h3>摆放手臂</h3>
-                            <p>前臂平放，旁边放一张A4白纸</p>
-                        </div>
+                        <div class="step-content"><h3>摆放手臂</h3><p>前臂平放，旁边放一张A4白纸</p></div>
                     </div>
                     <div class="step">
                         <div class="step-num">3</div>
-                        <div class="step-content">
-                            <h3>对准拍摄</h3>
-                            <p>手机平行于手臂，同时拍到手臂和白纸</p>
-                        </div>
+                        <div class="step-content"><h3>对准拍摄</h3><p>手机平行于手臂，同时拍到手臂和白纸</p></div>
                     </div>
                     <div class="step">
                         <div class="step-num">4</div>
-                        <div class="step-content">
-                            <h3>关闭增强</h3>
-                            <p>关闭闪光灯、美颜和滤镜</p>
-                        </div>
+                        <div class="step-content"><h3>关闭增强</h3><p>关闭闪光灯、美颜和滤镜</p></div>
                     </div>
                 </div>
-
                 <div class="btn-group">
-                    <button id="btn-camera" class="btn btn-primary btn-large" onclick="openCamera()">
-                        📸 开始拍照
-                    </button>
-                    <button id="btn-upload" class="btn btn-secondary" onclick="uploadFromAlbum()">
-                        🖼️ 从相册选择
-                    </button>
+                    <button id="btn-camera" class="btn btn-primary btn-large" onclick="openCamera()">📸 开始拍照</button>
+                    <button id="btn-upload" class="btn btn-secondary" onclick="uploadFromAlbum()">🖼️ 从相册选择</button>
                 </div>
             </div>
-
             <div class="demo-notice" id="demo-notice" style="display:none;">
                 <p>⚠️ 后端未连接，当前为演示模式</p>
             </div>
         </section>
 
-        <!-- 页面 2: 拍照/预览 -->
+        <!-- 页面 2: 拍照 -->
         <section id="page-camera" class="page">
             <div class="card">
                 <div class="camera-container">
@@ -75,36 +63,26 @@
                     <canvas id="camera-canvas" style="display:none;"></canvas>
                 </div>
                 <div class="btn-group">
-                    <button id="btn-capture" class="btn btn-primary btn-large" onclick="capturePhoto()">
-                        📷 拍照
-                    </button>
-                    <button class="btn btn-secondary" onclick="goToPage('page-guide')">
-                        ← 返回
-                    </button>
+                    <button id="btn-capture" class="btn btn-primary btn-large" onclick="capturePhoto()">📷 拍照</button>
+                    <button class="btn btn-secondary" onclick="goToPage('page-guide')">← 返回</button>
                 </div>
             </div>
         </section>
 
-        <!-- 页面 3: 预览确认 -->
+        <!-- 页面 3: 预览 -->
         <section id="page-preview" class="page">
             <div class="card">
                 <h2>确认照片</h2>
-                <div class="preview-container">
-                    <img id="preview-image" src="" alt="预览">
-                </div>
+                <div class="preview-container"><img id="preview-image" src="" alt="预览"></div>
                 <div class="preview-tips" id="preview-tips"></div>
                 <div class="btn-group">
-                    <button class="btn btn-primary btn-large" onclick="submitAnalysis()">
-                        ✅ 开始分析
-                    </button>
-                    <button class="btn btn-secondary" onclick="retakePhoto()">
-                        🔄 重拍
-                    </button>
+                    <button class="btn btn-primary btn-large" onclick="submitAnalysis()">✅ 开始分析</button>
+                    <button class="btn btn-secondary" onclick="retakePhoto()">🔄 重拍</button>
                 </div>
             </div>
         </section>
 
-        <!-- 页面 4: 分析中 -->
+        <!-- 页面 4: 加载 -->
         <section id="page-loading" class="page">
             <div class="card loading-card">
                 <div class="loading-spinner"></div>
@@ -113,47 +91,35 @@
             </div>
         </section>
 
-        <!-- 页面 5: 分析结果 -->
+        <!-- 页面 5: 结果 -->
         <section id="page-result" class="page">
             <div class="card result-card">
                 <h2>分析结果</h2>
-
-                <!-- ITA° 大数字展示 -->
                 <div class="ita-display">
                     <div class="ita-value" id="ita-value">--</div>
                     <div class="ita-unit">ITA°</div>
                 </div>
-
-                <!-- 肤色分类 -->
                 <div class="result-category" id="result-category">
                     <div class="color-bar" id="color-bar"></div>
                     <div class="category-name" id="category-name">--</div>
                     <div class="category-desc" id="category-desc"></div>
                     <div class="fitzpatrick" id="fitzpatrick">Fitzpatrick: --</div>
                 </div>
-
-                <!-- 详细数据 -->
                 <div class="result-details">
-                    <div class="detail-row">
-                        <span class="detail-label">L* (亮度)</span>
-                        <span class="detail-value" id="lab-L">--</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">a* (红绿)</span>
-                        <span class="detail-value" id="lab-a">--</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">b* (黄蓝)</span>
-                        <span class="detail-value" id="lab-b">--</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">置信度</span>
-                        <span class="detail-value" id="confidence">--</span>
-                    </div>
+                    <div class="detail-row"><span class="detail-label">L* (亮度)</span><span class="detail-value" id="lab-L">--</span></div>
+                    <div class="detail-row"><span class="detail-label">a* (红绿)</span><span class="detail-value" id="lab-a">--</span></div>
+                    <div class="detail-row"><span class="detail-label">b* (黄蓝)</span><span class="detail-value" id="lab-b">--</span></div>
+                    <div class="detail-row"><span class="detail-label">置信度</span><span class="detail-value" id="confidence">--</span></div>
                 </div>
-
-                <!-- 分类条 -->
                 <div class="score-bar" id="score-bar"></div>
+
+                <!-- UV 建议 -->
+                <div id="uv-section" class="card uv-section" style="display:none;">
+                    <h3>☀️ 紫外线与维D建议</h3>
+                    <div class="uv-display" id="uv-display"></div>
+                    <div class="vitd-summary" id="vitd-summary"></div>
+                    <div class="recommendations" id="recommendations"></div>
+                </div>
 
                 <div class="btn-group">
                     <button class="btn btn-primary" onclick="retakePhoto()">🔄 重新拍照</button>
@@ -175,7 +141,56 @@
             </div>
         </section>
 
-        <!-- 底部 -->
+        <!-- 页面 7: 历史列表 -->
+        <section id="page-history-list" class="page">
+            <div class="card">
+                <h2>📋 分析历史</h2>
+                <div id="history-list" class="history-list">
+                    <p class="empty-text">暂无记录</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 页面 8: UV 建议（独立工具） -->
+        <section id="page-uv-tool" class="page">
+            <div class="card">
+                <h2>☀️ UV 照射建议</h2>
+                <p class="guide-desc">根据你的肤色和当地 UV 指数，获取个性化的维生素D合成建议。</p>
+                <div class="form-group">
+                    <label>ITA° 值</label>
+                    <input type="number" id="uv-ita" placeholder="如 35.2" step="0.1" min="-90" max="90">
+                </div>
+                <div class="form-group">
+                    <label>Fitzpatrick 分型</label>
+                    <select id="uv-fitz">
+                        <option value="I">I - 极白皙</option>
+                        <option value="II">II - 白皙</option>
+                        <option value="III" selected>III - 中等</option>
+                        <option value="IV">IV - 偏棕</option>
+                        <option value="V">V - 深棕</option>
+                        <option value="VI">VI - 极深</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>UV 指数（留空自动估算）</label>
+                    <input type="number" id="uv-index" placeholder="如 6.5" step="0.1" min="0" max="20">
+                </div>
+                <div class="form-group">
+                    <label>月份</label>
+                    <select id="uv-month">
+                        <option value="1">1月</option><option value="2">2月</option>
+                        <option value="3">3月</option><option value="4">4月</option>
+                        <option value="5">5月</option><option value="6">6月</option>
+                        <option value="7">7月</option><option value="8">8月</option>
+                        <option value="9">9月</option><option value="10">10月</option>
+                        <option value="11">11月</option><option value="12">12月</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary btn-large" onclick="requestUvAdvice()">🔍 获取建议</button>
+                <div id="uv-tool-result" class="uv-tool-result" style="display:none;"></div>
+            </div>
+        </section>
+
         <footer class="app-footer">
             <p>重庆泛智电子科技有限责任公司 © 2026</p>
         </footer>
