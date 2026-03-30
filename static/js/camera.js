@@ -4,165 +4,112 @@
 
 const Camera = {
     stream: null,
-    facingMode: 'environment', // 默认后置摄像头
-    videoEl: null,
-    placeholderEl: null,
+    videoElement: null,
+    canvasElement: null,
 
-    /**
-     * 初始化摄像头
-     */
-    async init() {
-        this.videoEl = document.getElementById('camera-preview');
-        this.placeholderEl = document.getElementById('camera-placeholder');
-
-        try {
-            await this.start();
-        } catch (e) {
-            console.error('摄像头启动失败:', e);
-            this.placeholderEl.innerHTML = '<p>📷</p><p>无法访问摄像头</p><p style="font-size:12px;color:#999;">请使用"相册"按钮选择图片</p>';
-            this._enableGalleryOnly();
-        }
+    init() {
+        this.videoElement = document.getElementById('camera-preview');
+        this.canvasElement = document.getElementById('camera-canvas');
     },
 
     /**
-     * 启动摄像头
+     * 打开后置摄像头
      */
-    async start() {
-        // 先停止已有的流
-        this.stop();
+    async open() {
+        this.init();
 
-        const constraints = {
-            video: {
-                facingMode: this.facingMode,
-                width: { ideal: 1920 },
-                height: { ideal: 1080 }
+        try {
+            // 优先使用后置摄像头
+            const constraints = {
+                video: {
+                    facingMode: { ideal: 'environment' },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                },
+                audio: false
+            };
+
+            this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+            this.videoElement.srcObject = this.stream;
+            return true;
+        } catch (e) {
+            console.error('摄像头打开失败:', e);
+
+            // 退而求其次用任意摄像头
+            try {
+                const fallback = {
+                    video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+                    audio: false
+                };
+                this.stream = await navigator.mediaDevices.getUserMedia(fallback);
+                this.videoElement.srcObject = this.stream;
+                return true;
+            } catch (e2) {
+                console.error('摄像头不可用:', e2);
+                return false;
             }
-        };
-
-        this.stream = await navigator.mediaDevices.getUserMedia(constraints);
-        this.videoEl.srcObject = this.stream;
-        this.videoEl.style.display = 'block';
-        this.placeholderEl.style.display = 'none';
-
-        document.getElementById('btn-capture').disabled = false;
-    },
-
-    /**
-     * 停止摄像头
-     */
-    stop() {
-        if (this.stream) {
-            this.stream.getTracks().forEach(track => track.stop());
-            this.stream = null;
-        }
-    },
-
-    /**
-     * 切换前后摄像头
-     */
-    async switchCamera() {
-        this.facingMode = this.facingMode === 'environment' ? 'user' : 'environment';
-        try {
-            await this.start();
-        } catch (e) {
-            // 该设备可能只有一个摄像头
-            this.facingMode = this.facingMode === 'environment' ? 'user' : 'environment';
-            showToast('该设备不支持切换摄像头');
         }
     },
 
     /**
      * 拍照
+     * @returns {string} Base64 图片数据
      */
     capture() {
-        const canvas = document.getElementById('photo-canvas');
+        const video = this.videoElement;
+        const canvas = this.canvasElement;
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
         const ctx = canvas.getContext('2d');
-
-        // 使用视频的实际分辨率
-        canvas.width = this.videoEl.videoWidth || 1280;
-        canvas.height = this.videoEl.videoHeight || 720;
-
-        ctx.drawImage(this.videoEl, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, 0, 0);
 
         // 压缩到最大 1920px
-        return this._compressCanvas(canvas, 1920);
+        const maxSize = 1920;
+        let { width, height } = canvas;
+
+        if (width > maxSize || height > maxSize) {
+            const ratio = Math.min(maxSize / width, maxSize / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+        }
+
+        // 创建临时 canvas 进行压缩
+        const tmpCanvas = document.createElement('canvas');
+        tmpCanvas.width = width;
+        tmpCanvas.height = height;
+        const tmpCtx = tmpCanvas.getContext('2d');
+        tmpCtx.drawImage(canvas, 0, 0, width, height);
+
+        return tmpCanvas.toDataURL('image/jpeg', 0.85);
     },
 
     /**
-     * 从相册选择
+     * 关闭摄像头
      */
-    pick() {
-        document.getElementById('gallery-input').click();
+    close() {
+        if (this.stream) {
+            this.stream.getTracks().forEach(track => track.stop());
+            this.stream = null;
+        }
+        if (this.videoElement) {
+            this.videoElement.srcObject = null;
+        }
     },
 
     /**
-     * 压缩图片
+     * 将 Base64 转换为 Blob
      */
-    _compressCanvas(canvas, maxSize) {
-        return new Promise((resolve) => {
-            let { width, height } = canvas;
-
-            if (width > maxSize || height > maxSize) {
-                if (width > height) {
-                    height = Math.round(height * maxSize / width);
-                    width = maxSize;
-                } else {
-                    width = Math.round(width * maxSize / height);
-                    height = maxSize;
-                }
-            }
-
-            const out = document.createElement('canvas');
-            out.width = width;
-            out.height = height;
-            out.getContext('2d').drawImage(canvas, 0, 0, width, height);
-
-            out.toBlob((blob) => {
-                resolve({ blob, dataUrl: out.toDataURL('image/jpeg', 0.85) });
-            }, 'image/jpeg', 0.85);
-        });
-    },
-
-    /**
-     * 从文件压缩
-     */
-    compressFile(file, maxSize = 1920) {
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let w = img.width, h = img.height;
-
-                    if (w > maxSize || h > maxSize) {
-                        if (w > h) {
-                            h = Math.round(h * maxSize / w);
-                            w = maxSize;
-                        } else {
-                            w = Math.round(w * maxSize / h);
-                            h = maxSize;
-                        }
-                    }
-
-                    canvas.width = w;
-                    canvas.height = h;
-                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-
-                    canvas.toBlob((blob) => {
-                        resolve({ blob, dataUrl: canvas.toDataURL('image/jpeg', 0.85) });
-                    }, 'image/jpeg', 0.85);
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        });
-    },
-
-    /**
-     * 仅相册模式（摄像头不可用）
-     */
-    _enableGalleryOnly() {
-        document.getElementById('btn-capture').disabled = true;
+    dataURLtoBlob(dataURL) {
+        const parts = dataURL.split(',');
+        const mime = parts[0].match(/:(.*?);/)[1];
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], { type: mime });
     }
 };

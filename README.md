@@ -1,42 +1,16 @@
 # ITA 肤色分析系统
 
-基于手机拍照的个人肤色自测程序。用户将前臂和白色A4纸放在一起拍照，程序自动分析肤色 ITA° 并分类。
+基于手机拍照的个人肤色自测程序，通过分析前臂皮肤 + 白色A4纸参考，计算 ITA°（Individual Typology Angle）并分类肤色。
 
-## 功能特性
+## 🎯 功能
 
-- 📷 **手机拍照分析**：调用手机后置摄像头拍照，或从相册选择
-- 🔬 **ITA° 计算**：基于 CIELAB 色彩空间计算个体类型角（ITA°）
-- 🤍 **白纸校准**：自动检测白纸区域，校正光照偏差
+- 📸 **拍照分析**：使用手机摄像头拍照或从相册选择
+- 📄 **白纸校准**：自动检测白纸区域进行颜色归一化
+- 🧪 **ITA° 计算**：RGB → CIELAB → ITA° 精确转换
 - 🏷️ **五级分类**：浅色、中等色、晒黑色、棕色、深色
-- ☀️ **UV 防护建议**：根据肤色类型提供紫外线防护建议
-- 📋 **历史记录**：本地存储分析历史，追踪肤色变化
-- 📱 **移动端优化**：响应式设计，适配手机浏览器
+- 📊 **Fitzpatrick 映射**：对应 Fitzpatrick 皮肤分型
 
-## 技术架构
-
-```
-ita/
-├── ita/
-│   ├── core/               # 核心算法
-│   │   ├── calibrator.py   # 白纸检测与颜色校准
-│   │   ├── skin_detector.py # 皮肤区域检测（YCbCr + HSV）
-│   │   ├── ita_calculator.py # ITA° 计算引擎（RGB→XYZ→Lab→ITA°）
-│   │   └── classifier.py   # 肤色分类器（五分类 + Fitzpatrick）
-│   └── api/                # FastAPI 后端
-│       ├── main.py         # 应用入口
-│       ├── routes.py       # API 路由
-│       └── models.py       # 数据模型
-├── static/                 # 前端 Web App
-│   ├── index.html          # 单页应用
-│   ├── css/style.css       # 样式
-│   └── js/
-│       ├── app.js          # 主逻辑
-│       ├── camera.js       # 摄像头控制
-│       └── api.js          # API 封装
-└── requirements.txt
-```
-
-## 快速开始
+## 🚀 快速开始
 
 ### 安装依赖
 
@@ -48,48 +22,56 @@ pip install -r requirements.txt
 
 ```bash
 cd /root/projects/ita
-python -m uvicorn ita.api.main:app --host 0.0.0.0 --port 8000
+uvicorn ita.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 访问
+访问 http://localhost:8000 即可使用。
 
-- 🌐 Web 界面：http://localhost:8000
-- 📖 API 文档：http://localhost:8000/docs
+## 📱 使用方法
 
-## API 接口
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | /api/analyze | 上传图片进行肤色分析 |
-| GET | /api/health | 健康检查 |
-| GET | /api/categories | 获取所有肤色分类 |
-| GET | /api/result/{id} | 查询历史结果 |
-
-## 肤色分类标准
-
-| 类别 | ITA° 范围 | 描述 | Fitzpatrick |
-|------|----------|------|-------------|
-| 浅色 | > 55° | 非常白皙 | I, II |
-| 中等色 | 28° ~ 55° | 白皙到橄榄色 | II, III |
-| 晒黑色 | 10° ~ 28° | 日晒后偏棕 | III, IV |
-| 棕色 | -30° ~ 10° | 天然棕褐色 | IV, V |
-| 深色 | < -30° | 深棕色至黑色 | V, VI |
-
-## ITA° 计算公式
-
-```
-ITA° = arctan((L* - 50) / b*) × 180 / π
-```
-
-其中 L* 和 b* 来自 CIE L*a*b* 色彩空间（D65 标准光源）。
-
-## 拍照要求
-
-1. 在自然光下拍摄（白天靠窗，避免直射阳光）
-2. 手臂平放，旁边放一张白色 A4 纸
-3. 手机平行拍摄，避免阴影
+1. 在自然光下（白天靠窗），将前臂平放
+2. 在手臂旁放一张 A4 白纸
+3. 手机平行拍摄，确保同时拍到手臂和白纸
 4. 关闭闪光灯、美颜和滤镜
+5. 上传照片，等待分析结果
 
-## License
+## 🏗️ 项目结构
 
-MIT
+```
+ita/
+├── core/                    # 核心算法
+│   ├── calibrator.py        # 白纸检测与颜色校准
+│   ├── skin_detector.py     # 皮肤区域检测
+│   ├── ita_calculator.py    # ITA° 计算引擎
+│   └── classifier.py        # 肤色分类器
+├── api/                     # FastAPI 后端
+│   ├── main.py              # 主入口
+│   ├── routes.py            # API 路由
+│   └── models.py            # 数据模型
+├── static/                  # 前端
+│   ├── index.html
+│   ├── css/style.css
+│   └── js/{app,camera,api}.js
+└── requirements.txt
+```
+
+## 🔬 ITA° 分类标准
+
+| 分类 | ITA° 范围 | Fitzpatrick | 描述 |
+|------|----------|-------------|------|
+| 浅色 | > 55° | I-II | 非常白皙 |
+| 中等色 | 28° ~ 55° | II-III | 白皙到橄榄色 |
+| 晒黑色 | 10° ~ 28° | III-IV | 日晒后偏棕 |
+| 棕色 | -30° ~ 10° | IV-V | 天然棕褐色 |
+| 深色 | < -30° | V-VI | 深棕色至黑色 |
+
+## 📡 API 接口
+
+- `POST /api/analyze` - 上传图片进行肤色分析
+- `GET /api/health` - 健康检查
+- `GET /api/result/{id}` - 查询历史结果
+- `GET /api/history` - 获取历史记录
+
+## 📄 License
+
+重庆泛智电子科技有限责任公司 © 2026

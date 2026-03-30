@@ -4,204 +4,185 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ITA 肤色分析</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <!-- 页面1：首页/引导 -->
-    <div id="page-home" class="page active">
-        <div class="container">
-            <div class="logo-area">
-                <div class="logo">🔬</div>
-                <h1>ITA 肤色分析</h1>
-                <p class="subtitle">拍照即可了解你的肤色分类</p>
-            </div>
+    <div id="app">
+        <!-- 页面头部 -->
+        <header class="app-header">
+            <div class="logo">🧪</div>
+            <h1>ITA 肤色分析</h1>
+            <p class="subtitle">拍照自测 · 了解你的肤色</p>
+        </header>
 
-            <div class="guide-card">
+        <!-- 页面 1: 拍照引导 -->
+        <section id="page-guide" class="page active">
+            <div class="card">
                 <h2>📷 拍照指南</h2>
-                <div class="guide-steps">
+                <p class="guide-desc">将前臂和白色A4纸放在一起拍照，程序会自动分析你的肤色类型。</p>
+
+                <div class="steps">
                     <div class="step">
-                        <div class="step-num">①</div>
-                        <div class="step-text">在<strong>自然光</strong>下（白天靠窗，无直射阳光）</div>
-                    </div>
-                    <div class="step">
-                        <div class="step-num">②</div>
-                        <div class="step-text">手臂<strong>平放</strong>，旁边放一张<strong>A4白纸</strong></div>
-                    </div>
-                    <div class="step">
-                        <div class="step-num">③</div>
-                        <div class="step-text">手机<strong>平行拍摄</strong>，避免阴影</div>
-                    </div>
-                    <div class="step">
-                        <div class="step-num">④</div>
-                        <div class="step-text"><strong>关闭</strong>闪光灯、美颜和滤镜</div>
-                    </div>
-                </div>
-            </div>
-
-            <button class="btn btn-primary btn-large" onclick="showPage('page-camera')">
-                📷 开始拍照
-            </button>
-
-            <button class="btn btn-secondary" onclick="showPage('page-history')" id="btn-history-home">
-                📋 查看历史记录
-            </button>
-        </div>
-    </div>
-
-    <!-- 页面2：拍照 -->
-    <div id="page-camera" class="page">
-        <div class="container">
-            <div class="page-header">
-                <button class="btn-back" onclick="stopCamera(); showPage('page-home')">← 返回</button>
-                <h2>拍照</h2>
-            </div>
-
-            <div class="camera-container">
-                <video id="camera-preview" autoplay playsinline></video>
-                <canvas id="photo-canvas" style="display:none;"></canvas>
-                <div id="camera-placeholder" class="camera-placeholder">
-                    <p>📸</p>
-                    <p>正在启动摄像头...</p>
-                </div>
-            </div>
-
-            <div id="camera-controls">
-                <div class="camera-buttons">
-                    <button class="btn btn-outline" onclick="pickFromGallery()">
-                        🖼️ 相册
-                    </button>
-                    <button class="btn-capture" id="btn-capture" onclick="capturePhoto()" disabled>
-                        <div class="capture-ring">
-                            <div class="capture-inner"></div>
+                        <div class="step-num">1</div>
+                        <div class="step-content">
+                            <h3>选择光线</h3>
+                            <p>白天靠窗，自然光线下拍摄</p>
                         </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">2</div>
+                        <div class="step-content">
+                            <h3>摆放手臂</h3>
+                            <p>前臂平放，旁边放一张A4白纸</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">3</div>
+                        <div class="step-content">
+                            <h3>对准拍摄</h3>
+                            <p>手机平行于手臂，同时拍到手臂和白纸</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">4</div>
+                        <div class="step-content">
+                            <h3>关闭增强</h3>
+                            <p>关闭闪光灯、美颜和滤镜</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button id="btn-camera" class="btn btn-primary btn-large" onclick="openCamera()">
+                        📸 开始拍照
                     </button>
-                    <button class="btn btn-outline" onclick="switchCamera()">
-                        🔄 翻转
+                    <button id="btn-upload" class="btn btn-secondary" onclick="uploadFromAlbum()">
+                        🖼️ 从相册选择
                     </button>
                 </div>
-                <input type="file" id="gallery-input" accept="image/*" style="display:none" onchange="handleGallery(event)">
             </div>
 
-            <!-- 拍照预览 -->
-            <div id="preview-area" style="display:none;">
+            <div class="demo-notice" id="demo-notice" style="display:none;">
+                <p>⚠️ 后端未连接，当前为演示模式</p>
+            </div>
+        </section>
+
+        <!-- 页面 2: 拍照/预览 -->
+        <section id="page-camera" class="page">
+            <div class="card">
+                <div class="camera-container">
+                    <video id="camera-preview" autoplay playsinline></video>
+                    <canvas id="camera-canvas" style="display:none;"></canvas>
+                </div>
+                <div class="btn-group">
+                    <button id="btn-capture" class="btn btn-primary btn-large" onclick="capturePhoto()">
+                        📷 拍照
+                    </button>
+                    <button class="btn btn-secondary" onclick="goToPage('page-guide')">
+                        ← 返回
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 页面 3: 预览确认 -->
+        <section id="page-preview" class="page">
+            <div class="card">
+                <h2>确认照片</h2>
                 <div class="preview-container">
-                    <img id="preview-image" src="">
+                    <img id="preview-image" src="" alt="预览">
                 </div>
-                <div class="preview-buttons">
-                    <button class="btn btn-outline" onclick="retakePhoto()">📷 重拍</button>
-                    <button class="btn btn-primary btn-large" onclick="analyzePhoto()" id="btn-analyze">
-                        🔬 开始分析
+                <div class="preview-tips" id="preview-tips"></div>
+                <div class="btn-group">
+                    <button class="btn btn-primary btn-large" onclick="submitAnalysis()">
+                        ✅ 开始分析
+                    </button>
+                    <button class="btn btn-secondary" onclick="retakePhoto()">
+                        🔄 重拍
                     </button>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <!-- 页面3：分析中 -->
-    <div id="page-loading" class="page">
-        <div class="container center-content">
-            <div class="loader">
-                <div class="loader-ring"></div>
-                <p class="loader-text">正在分析肤色...</p>
+        <!-- 页面 4: 分析中 -->
+        <section id="page-loading" class="page">
+            <div class="card loading-card">
+                <div class="loading-spinner"></div>
+                <h2>正在分析...</h2>
+                <p>请稍候，正在处理您的照片</p>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <!-- 页面4：结果 -->
-    <div id="page-result" class="page">
-        <div class="container">
-            <div class="result-card">
-                <h2 class="result-title">分析结果</h2>
+        <!-- 页面 5: 分析结果 -->
+        <section id="page-result" class="page">
+            <div class="card result-card">
+                <h2>分析结果</h2>
 
-                <div id="result-ita" class="result-ita">
-                    <span class="ita-value">--</span>
-                    <span class="ita-unit">ITA°</span>
+                <!-- ITA° 大数字展示 -->
+                <div class="ita-display">
+                    <div class="ita-value" id="ita-value">--</div>
+                    <div class="ita-unit">ITA°</div>
                 </div>
 
-                <div id="result-category" class="result-category">
-                    <span class="category-badge">--</span>
+                <!-- 肤色分类 -->
+                <div class="result-category" id="result-category">
+                    <div class="color-bar" id="color-bar"></div>
+                    <div class="category-name" id="category-name">--</div>
+                    <div class="category-desc" id="category-desc"></div>
+                    <div class="fitzpatrick" id="fitzpatrick">Fitzpatrick: --</div>
                 </div>
 
-                <div id="result-confidence" class="result-confidence">
-                    置信度: --
-                </div>
-
-                <div id="result-calibrated" class="result-calibrated">
-                    --
-                </div>
-
+                <!-- 详细数据 -->
                 <div class="result-details">
                     <div class="detail-row">
                         <span class="detail-label">L* (亮度)</span>
-                        <span class="detail-value" id="result-L">--</span>
+                        <span class="detail-value" id="lab-L">--</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">a* (红绿轴)</span>
-                        <span class="detail-value" id="result-a">--</span>
+                        <span class="detail-label">a* (红绿)</span>
+                        <span class="detail-value" id="lab-a">--</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">b* (黄蓝轴)</span>
-                        <span class="detail-value" id="result-b">--</span>
+                        <span class="detail-label">b* (黄蓝)</span>
+                        <span class="detail-value" id="lab-b">--</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">Fitzpatrick 分型</span>
-                        <span class="detail-value" id="result-fitz">--</span>
+                        <span class="detail-label">置信度</span>
+                        <span class="detail-value" id="confidence">--</span>
                     </div>
                 </div>
 
-                <div id="result-description" class="result-description">
-                    --
-                </div>
+                <!-- 分类条 -->
+                <div class="score-bar" id="score-bar"></div>
 
-                <div id="result-advice" class="result-advice">
-                    <h3>☀️ 紫外线防护建议</h3>
-                    <p id="result-advice-text">--</p>
-                </div>
-            </div>
-
-            <!-- 肤色分类参考 -->
-            <div class="category-reference">
-                <h3>肤色分类参考</h3>
-                <div class="category-bar">
-                    <div class="cat-segment" style="background:#FFDFC4;" title="浅色 >55°">浅色</div>
-                    <div class="cat-segment" style="background:#F0C8A0;" title="中等色 28°-55°">中等</div>
-                    <div class="cat-segment" style="background:#D4A574;" title="晒黑 10°-28°">晒黑</div>
-                    <div class="cat-segment" style="background:#A0724A;" title="棕色 -30°-10°">棕色</div>
-                    <div class="cat-segment" style="background:#6B4226;" title="深色 <-30°">深色</div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="retakePhoto()">🔄 重新拍照</button>
+                    <button class="btn btn-secondary" onclick="goToPage('page-guide')">🏠 返回首页</button>
                 </div>
             </div>
+        </section>
 
-            <div class="result-actions">
-                <button class="btn btn-primary" onclick="resetToCamera()">📷 重新拍照</button>
-                <button class="btn btn-secondary" onclick="showPage('page-history')">📋 查看历史</button>
+        <!-- 页面 6: 错误 -->
+        <section id="page-error" class="page">
+            <div class="card error-card">
+                <div class="error-icon">😔</div>
+                <h2 id="error-title">分析失败</h2>
+                <p id="error-message">请检查照片是否符合要求后重试</p>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="retakePhoto()">🔄 重拍</button>
+                    <button class="btn btn-secondary" onclick="goToPage('page-guide')">🏠 返回首页</button>
+                </div>
             </div>
-        </div>
+        </section>
+
+        <!-- 底部 -->
+        <footer class="app-footer">
+            <p>重庆泛智电子科技有限责任公司 © 2026</p>
+        </footer>
     </div>
 
-    <!-- 页面5：历史记录 -->
-    <div id="page-history" class="page">
-        <div class="container">
-            <div class="page-header">
-                <button class="btn-back" onclick="showPage('page-home')">← 返回</button>
-                <h2>历史记录</h2>
-                <button class="btn btn-text" onclick="clearHistory()">清空</button>
-            </div>
-
-            <div id="history-list" class="history-list">
-                <div class="history-empty">
-                    <p>📭</p>
-                    <p>暂无历史记录</p>
-                    <p class="text-muted">完成第一次肤色分析后，记录将显示在这里</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast 提示 -->
-    <div id="toast" class="toast" style="display:none;"></div>
-
-    <script src="/js/api.js"></script>
-    <script src="/js/camera.js"></script>
-    <script src="/js/app.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/camera.js"></script>
+    <script src="/static/js/app.js"></script>
 </body>
 </html>

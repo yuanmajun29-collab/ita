@@ -1,170 +1,174 @@
 """
 白纸检测与颜色校准模块
 
-核心思路：在同一张照片中，白纸提供已知反射率参照，
-用于校正光照偏差和设备传感器差异。
+通过检测图像中的白色A4纸区域，计算光照校准系数，
+消除不同设备和光照条件对肤色分析的影响。
 """
 
 import cv2
 import numpy as np
-from typing import Tuple, Optional
+from typing import Optional, Tuple, Dict
 
 
-class Calibrator:
-    """白纸检测与颜色归一化校准器"""
+class WhitePaperCalibrator:
+    """白纸校准器：基于白纸参考进行颜色归一化"""
 
-    def __init__(self):
-        # 白色区域 HSV 阈值参数
-        self.hue_low = 0
-        self.hue_high = 180
-        self.sat_low = 0
-        self.sat_high = 50       # 白纸饱和度很低
-        self.val_low = 180       # 白纸亮度较高
-        self.val_high = 255
+    # HSV 空间白纸检测阈值
+    WHITE_HSV_LOW = np.array([0, 0, 200])
+    WHITE_HSV_HIGH = np.array([180, 50, 255])
 
-        # 最小白纸面积（图像面积的 0.5%）
-        self.min_white_area_ratio = 0.005
+    def __init__(self, min_area_ratio: float = 0.02):
+        """
+        初始化校准器
 
-        # 中间亮度采样范围（排除极端像素）
-        self.brightness_percentile_low = 20
-        self.brightness_percentile_high = 80
+        Args:
+            min_area_ratio: 白纸最小面积占比（相对于全图），低于此值视为未检测到白纸
+        """
+        self.min_area_ratio = min_area_ratio
+        self.calibration_coefficients: Optional[Tuple[float, float, float]] = None
+        self.white_mean_rgb: Optional[Tuple[int, int, int]] = None
+        self.is_calibrated = False
 
-    def detect_white_region(self, image: np.ndarray) -> Tuple[Optional[np.ndarray], dict]:
+    def detect_white_paper(self, image: np.ndarray) -> Optional[np.ndarray]:
         """
         自动检测图像中的白纸区域
 
-        参数:
+        Args:
             image: BGR 格式输入图像
 
-        返回:
-            (white_mask, info)
-            white_mask: 白纸区域的二值掩码，未检测到则为 None
-            info: 检测信息字典
+        Returns:
+            白纸区域的掩码（mask），未检测到返回 None
         """
+        if image is None or image.size == 0:
+            return None
+
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-        # 构建白色区域掩码
-        mask = cv2.inRange(
-            hsv,
-            np.array([self.hue_low, self.sat_low, self.val_low]),
-            np.array([self.hue_high, self.sat_high, self.val_high])
+        # 基于亮度 V 通道先粗筛高亮区域
+        v_channel = hsv[:, :, 2]
+        _, bright_mask = cv2.threshold(v_channel, 200, 255, cv2.THRESH_BINARY)
+
+        # 再用 HSV 三通道精确筛选白色
+        white_mask = cv2.inRange(hsv, self.WHITE_HSV_LOW, self.WHITE_HSV_HIGH)
+
+        # 两个掩码取交集
+        combined_mask = cv2.bitwise_and(bright_mask, white_mask)
+
+        # 形态学操作：去除噪点、填充空洞
+        kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
+
+        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel_open)
+        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel_close)
+
+        # 找最大连通区域（白纸通常是最大白色区域）
+        contours, _ = cv2.findContours(
+            combined_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
+        if not contours:
+            return None
 
-        # 形态学操作：去噪 + 填充
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+        max_contour = max(contours, key=cv2.contourArea)
+        white_area = cv2.contourArea(max_contour)
+        image_area = image.shape[0] * image.shape[1]
 
-        # 找到最大连通区域（通常是白纸）
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=8)
+        # 面积检查
+        if white_area / image_area < self.min_area_ratio:
+            return None
 
-        if num_labels <= 1:
-            return None, {
-                "detected": False,
-                "reason": "未检测到白纸区域，请确保照片中包含白色A4纸"
-            }
+        # 生成白纸掩码
+        mask = np.zeros_like(combined_mask)
+        cv2.drawContours(mask, [max_contour], -1, 255, -1)
 
-        # 排除背景标签(0)，找面积最大的连通区域
-        stats[0, cv2.CC_STAT_AREA] = 0  # 忽略背景
-        max_label = np.argmax(stats[:, cv2.CC_STAT_AREA])
-        max_area = stats[max_label, cv2.CC_STAT_AREA]
+        return mask
 
-        # 检查面积是否足够
-        min_area = image.shape[0] * image.shape[1] * self.min_white_area_ratio
-        if max_area < min_area:
-            return None, {
-                "detected": False,
-                "reason": f"检测到的白色区域过小({max_area}px)，请确保白纸完整可见"
-            }
-
-        # 提取白纸掩码
-        white_mask = (labels == max_label).astype(np.uint8) * 255
-
-        # 计算白纸区域统计信息
-        white_pixels = image[white_mask == 255]
-        mean_rgb = np.mean(white_pixels, axis=0).tolist()
-        std_rgb = np.std(white_pixels, axis=0).tolist()
-
-        return white_mask, {
-            "detected": True,
-            "area_ratio": max_area / (image.shape[0] * image.shape[1]),
-            "mean_rgb": mean_rgb,
-            "std_rgb": std_rgb,
-            "center": centroids[max_label].tolist()
-        }
-
-    def get_white_reference(self, image: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    def get_white_mean(self, image: np.ndarray, mask: np.ndarray) -> Tuple[int, int, int]:
         """
-        从白纸掩码中提取参考白色（排除极端像素）
+        计算白纸区域的平均 RGB 值
 
-        参数:
+        Args:
             image: BGR 格式图像
             mask: 白纸区域掩码
 
-        返回:
-            mean_rgb: 白纸区域中间亮度像素的平均 RGB 值 [B, G, R]
+        Returns:
+            (R, G, B) 平均值
         """
-        white_pixels = image[mask == 255]
+        mean_bgr = cv2.mean(image, mask=mask)[:3]
+        # 转换为 RGB 顺序
+        return (int(mean_bgr[2]), int(mean_bgr[1]), int(mean_bgr[0]))
 
-        # 计算每个像素的亮度
-        gray = cv2.cvtColor(white_pixels.reshape(-1, 1, 3).astype(np.uint8), cv2.COLOR_BGR2GRAY)
-        gray = gray.flatten()
-
-        # 取中间亮度范围的像素
-        p_low = np.percentile(gray, self.brightness_percentile_low)
-        p_high = np.percentile(gray, self.brightness_percentile_high)
-        valid_mask = (gray >= p_low) & (gray <= p_high)
-
-        valid_pixels = white_pixels[valid_mask]
-
-        if len(valid_pixels) < 10:
-            # 回退到全部白纸像素
-            return np.mean(white_pixels, axis=0)
-
-        return np.mean(valid_pixels, axis=0)
-
-    def calibrate(self, image: np.ndarray, skin_rgb: np.ndarray,
-                  mask: Optional[np.ndarray] = None) -> Tuple[np.ndarray, dict]:
+    def calibrate(
+        self,
+        image: np.ndarray,
+        mask: Optional[np.ndarray] = None
+    ) -> Dict:
         """
-        基于白纸校准皮肤颜色
+        执行颜色校准
 
-        参数:
-            image: BGR 格式图像
-            skin_rgb: 皮肤区域平均 RGB 值 [B, G, R]
-            mask: 白纸掩码（可选，为 None 时自动检测）
+        Args:
+            image: BGR 格式输入图像
+            mask: 可选的白纸掩码，为 None 则自动检测
 
-        返回:
-            (normalized_rgb, calib_info)
-            normalized_rgb: 校准后的 RGB 值 [0-255]
-            calib_info: 校准信息
+        Returns:
+            校准结果字典，包含系数和状态
         """
-        # 检测或使用提供的白纸掩码
-        if mask is None:
-            mask, detect_info = self.detect_white_region(image)
-            if mask is None:
-                return skin_rgb, {
-                    "success": False,
-                    "reason": detect_info.get("reason", "未检测到白纸"),
-                    "normalized": False
-                }
-        else:
-            detect_info = {"detected": True, "manual_mask": True}
-
-        # 获取白纸参考色
-        white_ref = self.get_white_reference(image, mask)
-
-        # 避免除零，加微小偏移
-        white_ref_safe = np.maximum(white_ref, 1.0)
-
-        # 归一化：皮肤颜色相对于白纸的位置
-        normalized = (skin_rgb / white_ref_safe) * 255.0
-        normalized = np.clip(normalized, 0, 255)
-
-        return normalized, {
-            "success": True,
-            "normalized": True,
-            "white_reference": white_ref.tolist(),
-            "white_mean": detect_info.get("mean_rgb"),
-            "skin_raw": skin_rgb.tolist(),
-            "skin_normalized": normalized.tolist()
+        result = {
+            "success": False,
+            "white_mean_rgb": None,
+            "coefficients": None,
+            "message": ""
         }
+
+        # 自动检测白纸
+        if mask is None:
+            mask = self.detect_white_paper(image)
+            if mask is None:
+                result["message"] = "未检测到白纸区域，请确保照片中包含A4白纸"
+                return result
+
+        # 计算白纸平均 RGB
+        self.white_mean_rgb = self.get_white_mean(image, mask)
+
+        # 检查白纸颜色是否合理（不能太暗或偏色严重）
+        if max(self.white_mean_rgb) < 150:
+            result["message"] = "白纸区域亮度不足，请在更好的光照条件下拍照"
+            return result
+
+        # 计算校准系数（假设理想白纸为 255, 255, 255）
+        r, g, b = self.white_mean_rgb
+        self.calibration_coefficients = (
+            255.0 / max(r, 1),
+            255.0 / max(g, 1),
+            255.0 / max(b, 1)
+        )
+
+        self.is_calibrated = True
+        result["success"] = True
+        result["white_mean_rgb"] = self.white_mean_rgb
+        result["coefficients"] = self.calibration_coefficients
+        result["message"] = "校准成功"
+
+        return result
+
+    def normalize_color(
+        self,
+        skin_rgb: Tuple[float, float, float]
+    ) -> Tuple[float, float, float]:
+        """
+        基于校准系数归一化皮肤颜色
+
+        Args:
+            skin_rgb: 皮肤平均 RGB 值
+
+        Returns:
+            归一化后的 RGB 值 (0-255)
+        """
+        if not self.is_calibrated or self.calibration_coefficients is None:
+            return skin_rgb
+
+        kr, kg, kb = self.calibration_coefficients
+        r_norm = min(skin_rgb[0] * kr, 255.0)
+        g_norm = min(skin_rgb[1] * kg, 255.0)
+        b_norm = min(skin_rgb[2] * kb, 255.0)
+
+        return (r_norm, g_norm, b_norm)

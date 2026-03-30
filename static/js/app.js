@@ -1,263 +1,223 @@
 /**
- * ITA 肤色分析 - 主应用逻辑
+ * ITA 肤色分析 - 主逻辑
  */
 
-// ===== 页面路由 =====
-function showPage(pageId) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(pageId).classList.add('active');
+let capturedImageData = null;  // 拍照后的图片数据
+let isDemoMode = false;        // 演示模式标志
 
-    // 进入特定页面时的初始化
-    if (pageId === 'page-camera') {
-        Camera.init();
-        document.getElementById('preview-area').style.display = 'none';
-        document.getElementById('camera-controls').style.display = 'block';
-    } else if (pageId === 'page-history') {
-        renderHistory();
+// ===== 页面导航 =====
+function goToPage(pageId) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const page = document.getElementById(pageId);
+    if (page) page.classList.add('active');
+
+    // 离开相机页面时关闭摄像头
+    if (pageId !== 'page-camera') {
+        Camera.close();
     }
 }
 
 // ===== 拍照流程 =====
-let capturedBlob = null;
 
-async function capturePhoto() {
-    try {
-        const { blob, dataUrl } = Camera.capture();
-        capturedBlob = blob;
-        showPreview(dataUrl);
-    } catch (e) {
-        showToast('拍照失败，请重试');
-    }
-}
-
-function pickFromGallery() {
-    Camera.pick();
-}
-
-function handleGallery(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    Camera.compressFile(file).then(({ blob, dataUrl }) => {
-        capturedBlob = blob;
-        showPreview(dataUrl);
-    });
-
-    // 清空 input 以允许重复选择同一文件
-    event.target.value = '';
-}
-
-function showPreview(dataUrl) {
-    document.getElementById('preview-image').src = dataUrl;
-    document.getElementById('camera-controls').style.display = 'none';
-    document.getElementById('preview-area').style.display = 'block';
-}
-
-function retakePhoto() {
-    capturedBlob = null;
-    document.getElementById('preview-area').style.display = 'none';
-    document.getElementById('camera-controls').style.display = 'block';
-}
-
-function switchCamera() {
-    Camera.switchCamera();
-}
-
-// ===== 分析 =====
-async function analyzePhoto() {
-    if (!capturedBlob) {
-        showToast('请先拍照或选择图片');
-        return;
-    }
-
-    showPage('page-loading');
-
-    try {
-        const result = await API.analyzeImage(capturedBlob);
-
-        if (!result.success) {
-            showToast(result.message || '分析失败');
-            showPage('page-camera');
-            return;
-        }
-
-        // 保存到历史
-        saveToHistory(result);
-
-        // 显示结果
-        displayResult(result);
-        showPage('page-result');
-    } catch (e) {
-        showToast('分析出错: ' + e.message);
-        showPage('page-camera');
-    }
-}
-
-// ===== 显示结果 =====
-function displayResult(result) {
-    // ITA 值
-    document.getElementById('result-ita').querySelector('.ita-value').textContent =
-        result.ita !== null ? result.ita.toFixed(1) : '--';
-
-    // 分类
-    const badge = document.getElementById('result-category').querySelector('.category-badge');
-    badge.textContent = result.category || '未知';
-
-    // 分类颜色
-    const colorMap = {
-        'very_light': '#FFDFC4',
-        'medium': '#F0C8A0',
-        'tanned': '#D4A574',
-        'brown': '#A0724A',
-        'dark': '#6B4226'
-    };
-    badge.style.background = colorMap[result.category_id] || 'var(--primary)';
-
-    // 置信度
-    document.getElementById('result-confidence').textContent =
-        result.confidence ? `置信度: ${Math.round(result.confidence * 100)}%` : '--';
-
-    // 校准状态
-    const calibEl = document.getElementById('result-calibrated');
-    if (result.calibrated) {
-        calibEl.textContent = '✅ 已使用白纸校准';
-        calibEl.className = 'result-calibrated ok';
+/**
+ * 打开摄像头拍照
+ */
+async function openCamera() {
+    const success = await Camera.open();
+    if (success) {
+        goToPage('page-camera');
     } else {
-        calibEl.textContent = '⚠️ 未检测到白纸，结果仅供参考';
-        calibEl.className = 'result-calibrated warn';
-    }
-
-    // L*a*b* 值
-    if (result.lab) {
-        document.getElementById('result-L').textContent = result.lab.L?.toFixed(1) || '--';
-        document.getElementById('result-a').textContent = result.lab.a?.toFixed(1) || '--';
-        document.getElementById('result-b').textContent = result.lab.b?.toFixed(1) || '--';
-    }
-
-    // Fitzpatrick
-    document.getElementById('result-fitz').textContent =
-        result.fitzpatrick ? result.fitzpatrick.join(' / ') : '--';
-
-    // 描述
-    document.getElementById('result-description').textContent =
-        result.description || '--';
-
-    // UV 建议
-    document.getElementById('result-advice-text').textContent =
-        result.uv_advice || '--';
-}
-
-// ===== 历史记录 =====
-const HISTORY_KEY = 'ita_history';
-const MAX_HISTORY = 50;
-
-function saveToHistory(result) {
-    let history = getHistory();
-    history.unshift({
-        id: Date.now(),
-        ita: result.ita,
-        category: result.category,
-        category_id: result.category_id,
-        confidence: result.confidence,
-        timestamp: result.timestamp || new Date().toISOString()
-    });
-
-    // 限制数量
-    if (history.length > MAX_HISTORY) {
-        history = history.slice(0, MAX_HISTORY);
-    }
-
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-}
-
-function getHistory() {
-    try {
-        return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
-    } catch {
-        return [];
+        // 摄像头不可用，使用文件上传
+        alert('无法访问摄像头，请从相册选择照片');
+        uploadFromAlbum();
     }
 }
 
-function renderHistory() {
-    const container = document.getElementById('history-list');
-    const history = getHistory();
+/**
+ * 拍照
+ */
+function capturePhoto() {
+    capturedImageData = Camera.capture();
+    document.getElementById('preview-image').src = capturedImageData;
+    Camera.close();
+    goToPage('page-preview');
+}
 
-    if (history.length === 0) {
-        container.innerHTML = `
-            <div class="history-empty">
-                <p>📭</p>
-                <p>暂无历史记录</p>
-                <p class="text-muted">完成第一次肤色分析后，记录将显示在这里</p>
-            </div>
-        `;
+/**
+ * 从相册选择
+ */
+function uploadFromAlbum() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/jpeg,image/png,image/webp';
+    input.capture = false;
+
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // 压缩图片
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const img = new Image();
+            img.onload = () => {
+                const maxSize = 1920;
+                let { width, height } = img;
+                if (width > maxSize || height > maxSize) {
+                    const ratio = Math.min(maxSize / width, maxSize / height);
+                    width = Math.round(width * ratio);
+                    height = Math.round(height * ratio);
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                capturedImageData = canvas.toDataURL('image/jpeg', 0.85);
+                document.getElementById('preview-image').src = capturedImageData;
+                goToPage('page-preview');
+            };
+            img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+
+    input.click();
+}
+
+/**
+ * 重拍
+ */
+function retakePhoto() {
+    capturedImageData = null;
+    goToPage('page-guide');
+}
+
+// ===== 分析流程 =====
+
+/**
+ * 提交分析
+ */
+async function submitAnalysis() {
+    if (!capturedImageData) {
+        showError('提交失败', '没有可分析的照片');
         return;
     }
 
-    const colorMap = {
-        'very_light': '#FFDFC4',
-        'medium': '#F0C8A0',
-        'tanned': '#D4A574',
-        'brown': '#A0724A',
-        'dark': '#6B4226'
-    };
+    goToPage('page-loading');
 
-    container.innerHTML = history.map(item => {
-        const date = new Date(item.timestamp);
-        const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
-        const color = colorMap[item.category_id] || '#ccc';
+    // 尝试调用后端
+    const isBackendOk = await API.checkHealth();
 
-        return `
-            <div class="history-item">
-                <div class="history-color" style="background:${color};"></div>
-                <div class="history-info">
-                    <div class="history-ita">${item.category} · ${item.ita?.toFixed(1)}°</div>
-                    <div class="history-meta">${dateStr} · 置信度 ${Math.round((item.confidence || 0) * 100)}%</div>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
+    if (isBackendOk) {
+        // 真实分析
+        const blob = Camera.dataURLtoBlob(capturedImageData);
+        const result = await API.analyzeImage(blob);
 
-function clearHistory() {
-    if (confirm('确定要清空所有历史记录吗？')) {
-        localStorage.removeItem(HISTORY_KEY);
-        renderHistory();
-        showToast('历史记录已清空');
+        if (result.success) {
+            showResult(result.result);
+        } else {
+            showError('分析失败', result.message || '请检查照片是否符合要求');
+        }
+    } else {
+        // 演示模式
+        showDemoResult();
     }
 }
 
-// ===== 工具函数 =====
-function resetToCamera() {
-    capturedBlob = null;
-    showPage('page-camera');
+// ===== 结果展示 =====
+
+/**
+ * 显示真实分析结果
+ */
+function showResult(result) {
+    document.getElementById('ita-value').textContent = result.ita.toFixed(1);
+    document.getElementById('category-name').textContent = result.category;
+    document.getElementById('category-desc').textContent = result.description;
+    document.getElementById('fitzpatrick').textContent = `Fitzpatrick: ${result.fitzpatrick}`;
+    document.getElementById('color-bar').style.background = result.color_hex;
+
+    document.getElementById('lab-L').textContent = result.lab.L.toFixed(1);
+    document.getElementById('lab-a').textContent = result.lab.a.toFixed(1);
+    document.getElementById('lab-b').textContent = result.lab.b.toFixed(1);
+    document.getElementById('confidence').textContent = (result.confidence * 100).toFixed(0) + '%';
+
+    // 分类分数条
+    if (result.all_scores) {
+        renderScoreBar(result.all_scores);
+    }
+
+    goToPage('page-result');
 }
 
-function stopCamera() {
-    Camera.stop();
+/**
+ * 显示演示结果
+ */
+function showDemoResult() {
+    const demoData = {
+        ita: 35.2,
+        category: '中等色',
+        description: '白皙到橄榄色，偶尔晒伤但能晒黑',
+        fitzpatrick: 'II-III',
+        color_hex: '#F5CBA7',
+        confidence: 0.85,
+        lab: { L: 65.3, a: 12.1, b: 18.5 },
+        all_scores: {
+            '浅色': 0.12,
+            '中等色': 0.85,
+            '晒黑色': 0.28,
+            '棕色': 0.05,
+            '深色': 0.01
+        }
+    };
+
+    showResult(demoData);
 }
 
-function showToast(message) {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.style.display = 'block';
-    setTimeout(() => { toast.style.display = 'none'; }, 2500);
+/**
+ * 渲染分类分数条
+ */
+function renderScoreBar(scores) {
+    const container = document.getElementById('score-bar');
+    const colors = {
+        '浅色': '#FDEBD0',
+        '中等色': '#F5CBA7',
+        '晒黑色': '#E59866',
+        '棕色': '#BA4A00',
+        '深色': '#6E2C00'
+    };
+
+    let html = '';
+    for (const [name, score] of Object.entries(scores)) {
+        const pct = (score * 100).toFixed(0);
+        html += `
+            <div class="score-row">
+                <span class="score-label">${name}</span>
+                <div class="score-track">
+                    <div class="score-fill" style="width: ${pct}%; background: ${colors[name] || '#00BFA5'}"></div>
+                </div>
+                <span class="score-pct">${pct}%</span>
+            </div>
+        `;
+    }
+    container.innerHTML = html;
+}
+
+/**
+ * 显示错误
+ */
+function showError(title, message) {
+    document.getElementById('error-title').textContent = title;
+    document.getElementById('error-message').textContent = message;
+    goToPage('page-error');
 }
 
 // ===== 初始化 =====
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // 检查后端状态
-    API.healthCheck().then(ok => {
-        if (!ok) {
-            console.log('后端未连接，将使用 Demo 模式');
-        }
-    });
-
-    // 更新历史按钮
-    const history = getHistory();
-    const historyBtn = document.getElementById('btn-history-home');
-    if (historyBtn) {
-        historyBtn.textContent = history.length > 0
-            ? `📋 查看历史记录 (${history.length})`
-            : '📋 查看历史记录';
+    const isBackendOk = await API.checkHealth();
+    if (!isBackendOk) {
+        isDemoMode = true;
+        document.getElementById('demo-notice').style.display = 'block';
     }
 });

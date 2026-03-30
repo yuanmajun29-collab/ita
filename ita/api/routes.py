@@ -1,144 +1,200 @@
-"""API 路由"""
+"""
+API 路由模块
+
+提供图片上传分析、健康检查、历史记录查询等接口。
+"""
 
 import uuid
+import os
+import tempfile
+from datetime import datetime
+from typing import Optional
+
 import cv2
 import numpy as np
-from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from typing import Dict
 
-from ita.core.calibrator import Calibrator
+from ita.core.calibrator import WhitePaperCalibrator
 from ita.core.skin_detector import SkinDetector
-from ita.core.ita_calculator import analyze_color
-from ita.core.classifier import classify_skin, get_all_categories
-from ita.api.models import AnalysisResponse, HealthResponse
+from ita.core.ita_calculator import ITACalculator
+from ita.core.classifier import SkinClassifier
+from ita.api.models import AnalysisResponse, AnalysisResult, HealthResponse, HistoryRecord
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
-# 存储历史结果（内存中，生产环境应使用数据库）
-results_store: Dict[str, dict] = {}
+# 简单的内存历史记录存储
+_history_store: list = []
 
-# 初始化检测器
-calibrator = Calibrator()
-skin_detector = SkinDetector()
-
-
-@router.get("/health", response_model=HealthResponse)
-async def health_check():
-    """健康检查"""
-    return HealthResponse()
+# 允许的图片类型
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
-@router.get("/categories")
-async def get_categories():
-    """获取所有肤色分类"""
-    return {"categories": get_all_categories()}
+def _allowed_file(filename: str) -> bool:
+    return os.path.splitext(filename)[1].lower() in ALLOWED_EXTENSIONS
 
 
 @router.post("/analyze", response_model=AnalysisResponse)
-async def analyze_image(file: UploadFile = File(...)):
+async def analyze_skin(file: UploadFile = File(...)):
     """
     上传图片进行肤色分析
 
-    参数:
-        file: 图片文件（支持 jpg, png, webp）
-
-    返回:
-        AnalysisResponse: 分析结果
+    要求图片包含前臂皮肤和白色A4纸（用于校准）
     """
     # 验证文件类型
-    allowed_types = {"image/jpeg", "image/png", "image/webp"}
-    if file.content_type not in allowed_types:
-        raise HTTPException(
-            status_code=400,
-            detail=f"不支持的文件类型: {file.content_type}，请上传 JPG/PNG/WebP 格式"
+    if not file.filename or not _allowed_file(file.filename):
+        return AnalysisResponse(
+            success=False,
+            message="不支持的文件格式，请上传 JPG/PNG/BMP/WebP 图片",
+            timestamp=datetime.now().isoformat()
         )
 
-    # 读取图片
+    # 读取文件
     contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        return AnalysisResponse(
+            success=False,
+            message="文件过大，请上传小于 10MB 的图片",
+            timestamp=datetime.now().isoformat()
+        )
+
+    # 解码图片
     nparr = np.frombuffer(contents, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     if image is None:
-        raise HTTPException(status_code=400, detail="无法读取图片文件")
-
-    try:
-        # 步骤1：检测白纸区域
-        white_mask, white_info = calibrator.detect_white_region(image)
-
-        # 步骤2：检测皮肤区域
-        skin_mask, skin_info = skin_detector.detect_skin(image, white_mask)
-
-        if not skin_info["detected"]:
-            return AnalysisResponse(
-                success=False,
-                message=skin_info.get("reason", "未检测到皮肤区域")
-            )
-
-        # 步骤3：提取皮肤颜色
-        skin_rgb_bgr, extract_info = skin_detector.extract_skin_color(image, skin_mask)
-
-        if not extract_info["success"]:
-            return AnalysisResponse(
-                success=False,
-                message=extract_info.get("reason", "无法提取皮肤颜色")
-            )
-
-        # 步骤4：白纸校准
-        calibrated = False
-        if white_info["detected"] and white_mask is not None:
-            # OpenCV BGR → RGB
-            skin_rgb_rgb = np.array([skin_rgb_bgr[2], skin_rgb_bgr[1], skin_rgb_bgr[0]])
-            normalized_rgb, calib_info = calibrator.calibrate(image, skin_rgb_bgr, white_mask)
-            calibrated = calib_info.get("success", False)
-
-            # 使用校准后的 RGB（注意顺序：calibrator 返回 BGR 顺序）
-            input_rgb = np.array([normalized_rgb[2], normalized_rgb[1], normalized_rgb[0]])
-        else:
-            # 无白纸，直接使用原始 RGB
-            input_rgb = np.array([skin_rgb_bgr[2], skin_rgb_bgr[1], skin_rgb_bgr[0]])
-
-        # 步骤5：颜色分析（RGB → Lab → ITA°）
-        color_info = analyze_color(input_rgb)
-
-        # 步骤6：肤色分类
-        classification = classify_skin(color_info["ita"])
-
-        # 生成结果
-        result_id = str(uuid.uuid4())[:8]
-        response = AnalysisResponse(
-            success=True,
-            ita=classification["ita"],
-            category=classification["category_name"],
-            category_id=classification["category_id"],
-            description=classification["description"],
-            fitzpatrick=classification["fitzpatrick"],
-            uv_advice=classification["uv_advice"],
-            confidence=classification["confidence"],
-            lab=color_info["lab"],
-            calibrated=calibrated,
-            message="分析完成" + ("（已白纸校准）" if calibrated else "（未检测到白纸，结果仅供参考）")
+        return AnalysisResponse(
+            success=False,
+            message="无法解析图片，请确保文件未损坏",
+            timestamp=datetime.now().isoformat()
         )
 
-        # 存储结果
-        results_store[result_id] = {
-            "response": response.model_dump(),
-            "timestamp": datetime.now().isoformat()
-        }
+    try:
+        # 1. 白纸校准
+        calibrator = WhitePaperCalibrator()
+        cal_result = calibrator.calibrate(image)
 
-        return response
+        if not cal_result["success"]:
+            return AnalysisResponse(
+                success=False,
+                message=cal_result["message"],
+                timestamp=datetime.now().isoformat()
+            )
+
+        # 2. 皮肤检测
+        detector = SkinDetector()
+        skin_mask = detector.detect_skin_exclude_white(
+            image, mask=calibrator.detect_white_paper(image)
+        )
+
+        if skin_mask is None:
+            return AnalysisResponse(
+                success=False,
+                message="未检测到皮肤区域，请确保手臂清晰可见",
+                timestamp=datetime.now().isoformat()
+            )
+
+        skin_rgb = detector.get_skin_mean_rgb(image, skin_mask)
+        if skin_rgb is None:
+            return AnalysisResponse(
+                success=False,
+                message="皮肤区域采样失败，请重拍",
+                timestamp=datetime.now().isoformat()
+            )
+
+        # 3. 颜色归一化
+        normalized_rgb = calibrator.normalize_color(skin_rgb)
+
+        # 4. ITA° 计算
+        calculator = ITACalculator()
+        analysis = calculator.analyze(normalized_rgb)
+
+        # 5. 肤色分类
+        classifier = SkinClassifier()
+        classification = classifier.classify(analysis["ita"])
+
+        # 构建结果
+        result = AnalysisResult(
+            ita=analysis["ita"],
+            category=classification["category"],
+            description=classification["description"],
+            fitzpatrick=classification["fitzpatrick"],
+            color_hex=classification["color_hex"],
+            confidence=classification["confidence"],
+            lab=analysis["lab"],
+            xyz=analysis.get("xyz"),
+            calibration={
+                "white_mean_rgb": cal_result["white_mean_rgb"],
+                "skin_mean_rgb": skin_rgb,
+                "normalized_rgb": tuple(round(v, 2) for v in normalized_rgb)
+            },
+            all_scores=classification["all_scores"]
+        )
+
+        # 保存到历史记录
+        record_id = str(uuid.uuid4())[:8]
+        _history_store.append({
+            "id": record_id,
+            "ita": result.ita,
+            "category": result.category,
+            "fitzpatrick": result.fitzpatrick,
+            "lab": result.lab,
+            "timestamp": datetime.now().isoformat()
+        })
+
+        return AnalysisResponse(
+            success=True,
+            message="分析完成",
+            result=result,
+            timestamp=datetime.now().isoformat()
+        )
 
     except Exception as e:
         return AnalysisResponse(
             success=False,
-            message=f"分析过程出错: {str(e)}"
+            message=f"分析过程出错: {str(e)}",
+            timestamp=datetime.now().isoformat()
         )
 
 
-@router.get("/result/{result_id}")
-async def get_result(result_id: str):
-    """查询历史分析结果"""
-    if result_id not in results_store:
-        raise HTTPException(status_code=404, detail="未找到该分析结果")
+@router.get("/health", response_model=HealthResponse)
+async def health_check():
+    """健康检查接口"""
+    return HealthResponse(
+        status="ok",
+        version="1.0.0",
+        timestamp=datetime.now().isoformat()
+    )
 
-    return results_store[result_id]
+
+@router.get("/result/{record_id}", response_model=AnalysisResponse)
+async def get_result(record_id: str):
+    """查询历史分析结果"""
+    for record in reversed(_history_store):
+        if record["id"] == record_id:
+            return AnalysisResponse(
+                success=True,
+                message="查询成功",
+                result=AnalysisResult(**record),
+                timestamp=datetime.now().isoformat()
+            )
+
+    return AnalysisResponse(
+        success=False,
+        message=f"未找到记录 {record_id}",
+        timestamp=datetime.now().isoformat()
+    )
+
+
+@router.get("/history", response_model=AnalysisResponse)
+async def get_history():
+    """获取所有历史记录"""
+    records = []
+    for r in reversed(_history_store[-20:]):  # 最近 20 条
+        records.append(HistoryRecord(**r))
+
+    return AnalysisResponse(
+        success=True,
+        message=f"共 {len(records)} 条记录",
+        timestamp=datetime.now().isoformat()
+    )
