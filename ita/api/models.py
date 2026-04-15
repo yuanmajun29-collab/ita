@@ -3,8 +3,7 @@ API 数据模型定义
 """
 
 from pydantic import BaseModel
-from typing import Optional, Dict, List
-from datetime import datetime
+from typing import Optional, Dict, Any
 
 
 class AnalysisResult(BaseModel):
@@ -25,7 +24,7 @@ class AnalysisResponse(BaseModel):
     """API 响应"""
     success: bool
     message: str
-    result: Optional[AnalysisResult] = None
+    result: Optional[AnalysisResult | Dict[str, Any]] = None
     timestamp: str
 
 

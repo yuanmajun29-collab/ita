@@ -11,8 +11,9 @@ from typing import Optional
 
 import cv2
 import numpy as np
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, Query
 
+from ita import __version__
 from ita.core.calibrator import WhitePaperCalibrator
 from ita.core.skin_detector import SkinDetector
 from ita.core.ita_calculator import ITACalculator
@@ -215,10 +216,10 @@ async def analyze_skin(
 async def health_check():
     """健康检查接口"""
     db = get_database()
-    record_count = db.get_record_count()
+    db.get_record_count()
     return HealthResponse(
         status="ok",
-        version="1.1.0",
+        version=__version__,
         timestamp=datetime.now().isoformat()
     )
 

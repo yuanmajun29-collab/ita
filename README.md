@@ -72,6 +72,28 @@ ita/
 - `GET /api/result/{id}` - 查询历史结果
 - `GET /api/history` - 获取历史记录
 
+## ✅ 开发测试与验证 Demo
+
+### 1) 运行自动化接口冒烟测试
+
+```bash
+pytest -q
+```
+
+包含用例：
+- 健康检查与版本一致性
+- 历史/趋势空数据场景
+- UV 建议接口基本可用性
+- 分析接口非法文件拦截
+
+### 2) 运行本地验证 demo（无需启动 uvicorn）
+
+```bash
+python3 scripts/verify_demo.py
+```
+
+该脚本会在进程内调用关键 API，并输出 PASS/FAIL 汇总，便于演示和回归验证。
+
 ## 📄 License
 
 重庆泛智电子科技有限责任公司 © 2026

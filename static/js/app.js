@@ -64,9 +64,11 @@ function onQualityUpdate(result) {
     if (captureBtn) {
         if (result.ready) {
             captureBtn.classList.add('btn-ready');
+            captureBtn.disabled = false;
             captureBtn.textContent = '✅ 拍照';
         } else {
             captureBtn.classList.remove('btn-ready');
+            captureBtn.disabled = true;
             captureBtn.textContent = '📷 拍照';
         }
     }

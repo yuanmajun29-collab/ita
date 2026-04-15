@@ -10,13 +10,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 
+from ita import __version__
 from ita.api.routes import router
 from ita.api.ws_routes import router as ws_router
 
 app = FastAPI(
     title="ITA 肤色分析系统",
     description="基于手机拍照的个人肤色自测程序 - 分析 ITA° 并分类肤色，提供UV照射与维D合成建议",
-    version="1.2.0"
+    version=__version__
 )
 
 # 注册 API 路由
