@@ -181,7 +181,7 @@ class Database:
         records = [{"date": r["created_at"], "ita": r["ita"], "category": r["category"]} for r in rows]
 
         if not records:
-            return {"records": [], "stats": None}
+            return {"records": [], "stats": None, "days": days}
 
         ita_values = [r["ita"] for r in records]
         stats = {

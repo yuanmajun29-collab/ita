@@ -45,6 +45,10 @@
                         <div class="step-content"><h3>关闭增强</h3><p>关闭闪光灯、美颜和滤镜</p></div>
                     </div>
                 </div>
+                <div id="insecure-camera-notice" class="camera-insecure-notice" style="display:none;">
+                    <p><strong>当前为 HTTP / 公网访问：</strong>网页内<strong>实时预览</strong>与<strong>质量检测条</strong>不可用（浏览器限制 <code>getUserMedia</code>）。</p>
+                    <p>点<strong>「开始拍照」</strong>会调起<strong>系统相机或相册</strong>（与 App 拍照类似），选图后同样可分析；若需要画面内实时质量分，请用 <strong>HTTPS 域名</strong> 访问（见 README）。</p>
+                </div>
                 <div class="btn-group">
                     <button id="btn-camera" class="btn btn-primary btn-large" onclick="openCamera()">📸 开始拍照</button>
                     <button id="btn-upload" class="btn btn-secondary" onclick="uploadFromAlbum()">🖼️ 从相册选择</button>
@@ -99,6 +103,25 @@
         <section id="page-result" class="page">
             <div class="card result-card">
                 <h2>分析结果</h2>
+                <div id="result-photos-wrap" class="result-photos-wrap" style="display:none;">
+                    <div class="result-photo-col">
+                        <span class="result-photo-label">原始照片</span>
+                        <div class="result-photo-frame result-photo-frame-plain">
+                            <img id="result-photo-original" src="" alt="本次上传的原图">
+                        </div>
+                    </div>
+                    <div class="result-photo-col">
+                        <span class="result-photo-label">效果示意</span>
+                        <div id="result-photo-effect-box" class="result-photo-frame result-photo-effect">
+                            <img id="result-photo-effect" src="" alt="带分析标注的效果示意">
+                            <div class="result-photo-effect-overlay">
+                                <span class="effect-ita" id="effect-ita-badge">—</span>
+                                <span class="effect-cat" id="effect-cat-badge">—</span>
+                                <div id="effect-scores-mini" class="effect-scores-mini" style="display:none;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="ita-display">
                     <div class="ita-value" id="ita-value">--</div>
                     <div class="ita-unit">ITA°</div>
@@ -117,12 +140,16 @@
                 </div>
                 <div class="score-bar" id="score-bar"></div>
 
+                <!-- 面向用户的结果解读（由 app.js 根据数值生成） -->
+                <div id="result-interpretation" class="result-interpretation" style="display:none;" aria-live="polite"></div>
+
                 <!-- UV 建议 -->
                 <div id="uv-section" class="card uv-section" style="display:none;">
                     <h3>☀️ 紫外线与维D建议</h3>
                     <div class="uv-display" id="uv-display"></div>
                     <div class="vitd-summary" id="vitd-summary"></div>
                     <div class="recommendations" id="recommendations"></div>
+                    <div id="uv-ita-summary" class="uv-ita-summary" style="display:none;" aria-live="polite"></div>
                 </div>
 
                 <div class="btn-group">

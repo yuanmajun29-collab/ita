@@ -17,3 +17,9 @@ Thumbs.db
 
 # Env
 .env
+
+# 本地生成的 data 验证报告（可重新运行 scripts/visualize_data_report.py）
+reports/
+
+# 本地数据库（运行服务后会生成）
+ita_data.db

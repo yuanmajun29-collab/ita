@@ -20,6 +20,8 @@ from ita.core.ita_calculator import ITACalculator
 from ita.core.classifier import SkinClassifier
 from ita.core.uv_advisor import UVAdvisor
 from ita.core.database import get_database
+from ita.core.arm_validator import validate_forearm_skin_mask
+from ita.core.composition_gate import early_exit_message, note_no_analysis
 from ita.api.models import AnalysisResponse, AnalysisResult, HealthResponse
 
 router = APIRouter(prefix="/api")
@@ -47,8 +49,8 @@ async def analyze_skin(
     """
     上传图片进行肤色分析
 
-    要求图片包含前臂皮肤和白色A4纸（用于校准）
-    可选传入坐标或时间，获取UV照射建议
+    须同时识别到 **A4 白纸** 与 **符合要求的前臂皮肤**；若任一无法识别，仅返回提示，
+    **不进行**颜色校准与 ITA 肤色分析（不写成功结果）。可选传入坐标或时间获取 UV 建议。
     """
     # 验证文件类型
     if not file.filename or not _allowed_file(file.filename):
@@ -79,27 +81,36 @@ async def analyze_skin(
         )
 
     try:
-        # 1. 白纸校准
+        # 1. 构图预检：未识别到 A4 或前臂时不进入校准/ITA，仅返回提示
         calibrator = WhitePaperCalibrator()
-        cal_result = calibrator.calibrate(image)
+        white_mask = calibrator.detect_white_paper(image)
+        detector = SkinDetector()
+        skin_mask = detector.detect_skin_exclude_white(image, white_mask)
 
-        if not cal_result["success"]:
+        if skin_mask is None:
+            arm_ok, arm_msg = False, ""
+        else:
+            arm_ok, arm_msg = validate_forearm_skin_mask(skin_mask)
+
+        early = early_exit_message(
+            has_white_paper=white_mask is not None,
+            skin_mask_present=skin_mask is not None,
+            arm_ok=arm_ok,
+            arm_msg=arm_msg,
+        )
+        if early is not None:
             return AnalysisResponse(
                 success=False,
-                message=cal_result["message"],
+                message=early,
                 timestamp=datetime.now().isoformat()
             )
 
-        # 2. 皮肤检测
-        detector = SkinDetector()
-        skin_mask = detector.detect_skin_exclude_white(
-            image, mask=calibrator.detect_white_paper(image)
-        )
-
-        if skin_mask is None:
+        # 2. 白纸校准（预检已通过：必有白纸掩码且前臂启发式通过）
+        cal_result = calibrator.calibrate(image, mask=white_mask)
+        if not cal_result["success"]:
             return AnalysisResponse(
                 success=False,
-                message="未检测到皮肤区域，请确保手臂清晰可见",
+                message=note_no_analysis(cal_result["message"]),
                 timestamp=datetime.now().isoformat()
             )
 
@@ -107,7 +118,7 @@ async def analyze_skin(
         if skin_rgb is None:
             return AnalysisResponse(
                 success=False,
-                message="皮肤区域采样失败，请重拍",
+                message=note_no_analysis("皮肤区域采样失败，请重拍"),
                 timestamp=datetime.now().isoformat()
             )
 
